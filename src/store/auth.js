@@ -20,12 +20,8 @@ export function isLoggedIn() {
   const token = getToken();
   const patient = getPatient();
   if (!token || !patient) return false;
-  // If old session is missing facility_id, force re-login so the new
-  // facility_id field gets populated from the updated verify-otp response.
-  if (!patient.facility_id) {
-    clearSession();
-    return false;
-  }
+  // The backend doesn't currently provide a facility_id in the patient info.
+  // We remove the check here to avoid an immediate logout after successful verification.
   return true;
 }
 
