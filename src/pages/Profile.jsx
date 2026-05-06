@@ -14,7 +14,8 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react";
-import { getPatient, clearSession } from "../store/auth";
+import { getPatient, clearSession, updatePatientInStore } from "../store/auth";
+import { getProfile, updateProfile } from "../api/auth";
 
 function InfoRow({ icon: Icon, label, value, editable, name, onChange, editMode }) {
   return (
@@ -61,10 +62,15 @@ export default function ProfilePage() {
     setDraft((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleSave() {
-    setPatient(draft);
-    localStorage.setItem("patient_info", JSON.stringify(draft));
-    setEditMode(false);
+  async function handleSave() {
+    try {
+      const updated = await updateProfile(draft);
+      setPatient(updated);
+      updatePatientInStore(updated);
+      setEditMode(false);
+    } catch (err) {
+      alert("Failed to save profile changes to server.");
+    }
   }
 
   function handleCancel() {

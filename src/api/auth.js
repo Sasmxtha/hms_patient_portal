@@ -17,3 +17,18 @@ export async function verifyOtp(email, otp) {
   const res = await api.post("/patient/auth/verify-otp", { email, otp });
   return res.data;
 }
+/**
+ * Get patient profile.
+ */
+export async function getProfile() {
+  const res = await api.get("/portal/profile");
+  return res.data;
+}
+
+/**
+ * Update patient profile.
+ */
+export async function updateProfile(payload) {
+  const res = await api.patch("/portal/profile", payload);
+  return res.data;
+}

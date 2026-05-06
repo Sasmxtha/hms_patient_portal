@@ -34,3 +34,7 @@ export function clearSession() {
   localStorage.removeItem("patient_token");
   localStorage.removeItem("patient_info");
 }
+
+export function updatePatientInStore(patient) {
+  localStorage.setItem("patient_info", JSON.stringify(patient));
+}
