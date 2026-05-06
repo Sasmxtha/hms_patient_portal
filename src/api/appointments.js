@@ -82,6 +82,38 @@ export async function getDoctorAvailability(doctorId, startDate, endDate) {
   }
 }
 
+// --- Helpers ---
+
+function getDoctorTokenPrefix(firstname) {
+  if (!firstname) return "DOC";
+  const name = firstname.toUpperCase().trim();
+  const vowels = new Set(["A", "E", "I", "O", "U"]);
+  let consonants = [];
+  for (let char of name) {
+    if (/[A-Z]/.test(char) && !vowels.has(char)) {
+      consonants.push(char);
+    }
+  }
+
+  let prefix = "";
+  if (consonants.length >= 3) {
+    prefix = consonants.slice(0, 3).join("");
+  } else if (consonants.length > 0) {
+    prefix = consonants.join("");
+    for (let char of name) {
+      if (/[A-Z]/.test(char) && prefix.length < 3) {
+        if (!prefix.includes(char)) {
+          prefix += char;
+        }
+      }
+    }
+    prefix = prefix.padEnd(3, "X").substring(0, 3);
+  } else {
+    prefix = name.padEnd(3, "X").substring(0, 3);
+  }
+  return prefix;
+}
+
 /**
  * POST /portal/book
  */
@@ -90,16 +122,30 @@ export async function bookAppointment(payload) {
     const res = await api.post("/portal/book", payload);
     return res.data;
   } catch (err) {
+    const doctor = MOCK_DOCTORS.find((d) => d.id === payload.doctor_id) || {
+      firstname: "Mock",
+      lastname: "Doctor",
+    };
+    const prefix = getDoctorTokenPrefix(doctor.firstname);
+    const tokenId = prefix + String(Math.floor(Math.random() * 900) + 100);
+
     const newAppt = {
       appointment_id: Math.floor(Math.random() * 10000),
-      doctor_name: "Dr. Mock Doctor",
+      doctor_name: `Dr. ${doctor.firstname} ${doctor.lastname}`,
       appointment_date: payload.appointment_date || payload.AppointmentDate,
       appointment_time: payload.appointment_time || payload.AppointmentTime,
       appointment_status: "Scheduled",
-      cancelled: false
+      token_id: tokenId,
+      cancelled: false,
     };
     MOCK_APPOINTMENTS.push(newAppt);
-    return { success: true, message: "Mock Appointment Booked", appointment: newAppt, token_id: "TKN-" + Math.floor(Math.random() * 1000) };
+
+    return {
+      success: true,
+      message: "Mock Appointment Booked",
+      appointment: newAppt,
+      token_id: tokenId,
+    };
   }
 }
 
@@ -108,10 +154,14 @@ export async function bookAppointment(payload) {
  */
 export async function cancelAppointment(appointmentId, reason) {
   try {
-    const res = await api.post(`/portal/appointments/${appointmentId}/cancel`, { reason });
+    const res = await api.post(`/portal/appointments/${appointmentId}/cancel`, {
+      reason,
+    });
     return res.data;
   } catch (err) {
-    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.filter(a => a.appointment_id !== appointmentId);
+    MOCK_APPOINTMENTS = MOCK_APPOINTMENTS.filter(
+      (a) => a.appointment_id !== appointmentId
+    );
     return { success: true, message: "Mock Appointment Cancelled" };
   }
 }
