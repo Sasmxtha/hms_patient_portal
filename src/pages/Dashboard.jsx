@@ -57,7 +57,10 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold">Hello, {firstName}! 👋</h1>
             <p className="text-teal-200 text-sm mt-0.5">Hope you are feeling well today.</p>
           </div>
-          <button className="bg-white/10 p-2.5 rounded-full hover:bg-white/20 transition-colors">
+          <button 
+            onClick={() => alert("Notifications coming soon!")}
+            className="bg-white/10 p-2.5 rounded-full hover:bg-white/20 transition-colors"
+          >
             <Bell size={22} />
           </button>
         </div>
@@ -103,10 +106,12 @@ export default function DashboardPage() {
 
         {/* Upcoming appointments */}
         <section>
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Upcoming Appointments</h2>
-            <button onClick={() => navigate("/appointments")} className="text-teal-600 text-xs font-bold hover:underline">View All</button>
-          </div>
+          <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Upcoming Appointments</p>
+          <button onClick={() => navigate("/appointments")} className="text-teal-600 text-[11px] font-bold hover:underline">
+            View All
+          </button>
+        </div>
           {loading ? (
             <div className="bg-white rounded-2xl p-6 flex justify-center">
               <div className="w-6 h-6 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
@@ -127,10 +132,12 @@ export default function DashboardPage() {
         {/* Recent visits */}
         {recent.length > 0 && (
           <section>
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Visits</h2>
-              <button onClick={() => navigate("/appointments")} className="text-teal-600 text-xs font-bold hover:underline">View All</button>
-            </div>
+            <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Recent Visits</p>
+          <button onClick={() => navigate("/appointments")} className="text-teal-600 text-[11px] font-bold hover:underline">
+            View All
+          </button>
+        </div>
             <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50 overflow-hidden">
               {recent.map((a) => (
                 <div key={a.appointment_id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer" onClick={() => navigate("/appointments")}>
