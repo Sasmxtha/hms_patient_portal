@@ -25,6 +25,24 @@ export async function getReportFileBlob(uploadId) {
   return URL.createObjectURL(res.data);
 }
 
+/** POST /portal/reports/upload */
+export async function uploadPatientReport({ reportType, reportDate, fileTitle, file }) {
+  const formData = new FormData();
+  formData.append("report_type", reportType);
+  formData.append("report_date", reportDate);
+  if (fileTitle?.trim()) {
+    formData.append("file_title", fileTitle.trim());
+  }
+  formData.append("file", file);
+
+  const res = await api.post("/portal/reports/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return res.data;
+}
+
 /** GET /portal/diagnoses */
 export async function getDiagnoses() {
   const res = await api.get("/portal/diagnoses");

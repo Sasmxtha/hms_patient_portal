@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FileText, Pill, FlaskConical, Activity, ChevronDown, ChevronUp, Upload, Eye, AlertTriangle } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
-import { getDiagnoses, getPatientReports, getReportFileBlob } from "../api/records";
+import { getDiagnoses, getPatientReports, getReportFileBlob, uploadPatientReport } from "../api/records";
 
 const TABS = ["Diagnoses", "Uploaded Files"];
 
@@ -13,12 +13,21 @@ export default function MedicalRecordsPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
 
+  const loadReports = useCallback(async () => {
+    try {
+      const data = await getPatientReports();
+      setReports(Array.isArray(data) ? data : []);
+    } catch {
+      setReports([]);
+    }
+  }, []);
+
   useEffect(() => {
     Promise.all([
       getDiagnoses().then(setDiagnoses).catch(() => setDiagnoses([])),
-      getPatientReports().then(setReports).catch(() => setReports([])),
+      loadReports(),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [loadReports]);
 
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -63,18 +72,124 @@ export default function MedicalRecordsPage() {
             </div>
           )
         ) : (
-          reports.length === 0 ? (
-            <EmptyState icon={<Upload size={28} />} title="No uploaded files" subtitle="Reports uploaded by the clinic will appear here." />
-          ) : (
-            <div className="space-y-3">
-              {reports.map((report) => (
+          <div className="space-y-3">
+            <UploadReportCard onUploaded={loadReports} />
+            {reports.length === 0 ? (
+              <EmptyState icon={<Upload size={28} />} title="No uploaded files" subtitle="Upload your lab or health reports here." />
+            ) : (
+              reports.map((report) => (
                 <ReportFileCard key={report.upload_id} report={report} />
-              ))}
-            </div>
-          )
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function UploadReportCard({ onUploaded }) {
+  const [reportType, setReportType] = useState("lab");
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fileTitle, setFileTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!selectedFile) {
+      alert("Please select a file first.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await uploadPatientReport({
+        reportType,
+        reportDate,
+        fileTitle,
+        file: selectedFile,
+      });
+      setFileTitle("");
+      setSelectedFile(null);
+      const fileInput = document.getElementById("patient-report-file");
+      if (fileInput) fileInput.value = "";
+      await onUploaded();
+      alert("Report uploaded successfully.");
+    } catch (error) {
+      const message = error?.response?.data?.detail || "Upload failed. Please try again.";
+      alert(message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="p-2 rounded-lg bg-teal-50 text-teal-600"><Upload size={16} /></div>
+        <p className="text-sm font-bold text-gray-800">Upload Report</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label className="text-xs font-semibold text-gray-600">
+          Report Type
+          <select
+            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
+            value={reportType}
+            onChange={(e) => setReportType(e.target.value)}
+          >
+            <option value="lab">Lab Report</option>
+            <option value="health">Health Report</option>
+          </select>
+        </label>
+
+        <label className="text-xs font-semibold text-gray-600">
+          Report Date
+          <input
+            type="date"
+            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
+            value={reportDate}
+            onChange={(e) => setReportDate(e.target.value)}
+            required
+          />
+        </label>
+
+        <label className="text-xs font-semibold text-gray-600">
+          Title (optional)
+          <input
+            type="text"
+            placeholder="Example: CBC Test"
+            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
+            value={fileTitle}
+            onChange={(e) => setFileTitle(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="block text-xs font-semibold text-gray-600 mt-3">
+        File (.pdf, .png, .jpg, .jpeg)
+        <input
+          id="patient-report-file"
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg"
+          className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-teal-700"
+          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+          required
+        />
+      </label>
+
+      <div className="mt-3 flex justify-end">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-teal-600 px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-60"
+        >
+          <Upload size={14} />
+          {submitting ? "Uploading..." : "Upload"}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -226,6 +341,7 @@ function ReportFileCard({ report }) {
         <p className="text-sm font-bold text-gray-800 truncate">{report.file_title || report.filename}</p>
         <p className="text-xs text-gray-400 mt-0.5">
           {report.date}
+          {report.report_type && <span className="ml-2 uppercase">{report.report_type}</span>}
           {report.file_size > 0 && <span className="ml-2">{(report.file_size / 1024).toFixed(1)} KB</span>}
         </p>
       </div>
