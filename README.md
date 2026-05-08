@@ -52,6 +52,51 @@ The app uses these existing backend endpoints:
 
 No backend changes required.
 
+## Android Play Store Release
+
+### 1) Prepare signing key
+
+Create a keystore (one-time), then copy `android/key.properties.example` to `android/key.properties` and fill the real values.
+
+Example `key.properties`:
+
+```properties
+storeFile=release-keystore.jks
+storePassword=your_store_password
+keyAlias=release
+keyPassword=your_key_password
+```
+
+Place the keystore file inside `android/` (or update `storeFile` with an absolute path).
+
+### 2) Build release bundle (.aab)
+
+```bash
+npm install
+npm run android:bundle
+```
+
+Output file:
+
+- `android/app/build/outputs/bundle/release/app-release.aab`
+
+### 3) Build release APK (optional local testing)
+
+```bash
+npm run android:apk
+```
+
+Output file:
+
+- `android/app/build/outputs/apk/release/app-release.apk`
+
+### 4) Upload to Play Console
+
+- Create/choose app in Google Play Console
+- Upload `.aab` to Internal testing first
+- Complete Data safety, content rating, and privacy policy details
+- Roll out to Closed/Production after validation
+
 ## Tech Stack
 
 - React 18 + React Router v6
