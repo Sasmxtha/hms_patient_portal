@@ -35,12 +35,17 @@ export async function uploadPatientReport({ reportType, reportDate, fileTitle, f
   }
   formData.append("file", file);
 
-  const res = await api.post("/portal/reports/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-  return res.data;
+  try {
+    const res = await api.post("/portal/reports/upload", formData);
+    return res.data;
+  } catch (err) {
+    // Some deployments differ on strict trailing-slash handling.
+    if (err?.response?.status === 404) {
+      const retryRes = await api.post("/portal/reports/upload/", formData);
+      return retryRes.data;
+    }
+    throw err;
+  }
 }
 
 /** GET /portal/diagnoses */

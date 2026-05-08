@@ -117,7 +117,12 @@ function UploadReportCard({ onUploaded }) {
       await onUploaded();
       alert("Report uploaded successfully.");
     } catch (error) {
-      const message = error?.response?.data?.detail || "Upload failed. Please try again.";
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      const message =
+        status === 404
+          ? "Upload API not found. Please refresh after latest backend deployment."
+          : detail || "Upload failed. Please try again.";
       alert(message);
     } finally {
       setSubmitting(false);
