@@ -11,6 +11,9 @@
     "lint": "eslint \"./src/**/*.{js,jsx}\""
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.2",
+    "@capacitor/cli": "^8.3.2",
+    "@capacitor/core": "^8.3.2",
     "axios": "^1.11.0",
     "dayjs": "^1.11.18",
     "lucide-react": "^0.542.0",

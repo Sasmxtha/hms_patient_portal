@@ -1,0 +1,5 @@
+{
+  "appId": "com.hflow.patientportal",
+  "appName": "HMS Patient Portal",
+  "webDir": "dist"
+}
