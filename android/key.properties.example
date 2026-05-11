@@ -1,4 +1,4 @@
 storeFile=release-keystore.jks
-storePassword=CHANGE_ME
+storePassword=hms@2026
 keyAlias=release
-keyPassword=CHANGE_ME
+keyPassword=hms@2026
