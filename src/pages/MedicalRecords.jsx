@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { FileText, Pill, FlaskConical, Activity, ChevronDown, ChevronUp, Upload, Eye, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  FileText, Pill, FlaskConical, Activity,
+  ChevronDown, ChevronUp, Upload, Eye, AlertTriangle, Stethoscope,
+} from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
-import { getDiagnoses, getPatientReports, getReportFileBlob, uploadPatientReport } from "../api/records";
+import { getDiagnoses, getPatientReports, getReportFileBlob } from "../api/records";
 
 const TABS = ["Diagnoses", "Uploaded Files"];
 
@@ -13,21 +16,12 @@ export default function MedicalRecordsPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
 
-  const loadReports = useCallback(async () => {
-    try {
-      const data = await getPatientReports();
-      setReports(Array.isArray(data) ? data : []);
-    } catch {
-      setReports([]);
-    }
-  }, []);
-
   useEffect(() => {
     Promise.all([
       getDiagnoses().then(setDiagnoses).catch(() => setDiagnoses([])),
-      loadReports(),
+      getPatientReports().then(setReports).catch(() => setReports([])),
     ]).finally(() => setLoading(false));
-  }, [loadReports]);
+  }, []);
 
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -43,7 +37,9 @@ export default function MedicalRecordsPage() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === tab ? "border-teal-600 text-teal-700" : "border-transparent text-gray-400 hover:text-gray-600"
+              activeTab === tab
+                ? "border-teal-600 text-teal-700"
+                : "border-transparent text-gray-400 hover:text-gray-600"
             }`}
           >
             {tab}
@@ -58,7 +54,11 @@ export default function MedicalRecordsPage() {
           </div>
         ) : activeTab === "Diagnoses" ? (
           diagnoses.length === 0 ? (
-            <EmptyState icon={<FileText size={28} />} title="No diagnosis records" subtitle="Your diagnosis history will appear here after your visits." />
+            <EmptyState
+              icon={<FileText size={28} />}
+              title="No diagnosis records"
+              subtitle="Your diagnosis history will appear here after your visits."
+            />
           ) : (
             <div className="space-y-4">
               {diagnoses.map((diag) => (
@@ -71,16 +71,17 @@ export default function MedicalRecordsPage() {
               ))}
             </div>
           )
+        ) : reports.length === 0 ? (
+          <EmptyState
+            icon={<Upload size={28} />}
+            title="No uploaded files"
+            subtitle="Reports uploaded by the clinic will appear here."
+          />
         ) : (
           <div className="space-y-3">
-            <UploadReportCard onUploaded={loadReports} />
-            {reports.length === 0 ? (
-              <EmptyState icon={<Upload size={28} />} title="No uploaded files" subtitle="Upload your lab or health reports here." />
-            ) : (
-              reports.map((report) => (
-                <ReportFileCard key={report.upload_id} report={report} />
-              ))
-            )}
+            {reports.map((report) => (
+              <ReportFileCard key={report.upload_id} report={report} />
+            ))}
           </div>
         )}
       </div>
@@ -88,133 +89,39 @@ export default function MedicalRecordsPage() {
   );
 }
 
-function UploadReportCard({ onUploaded }) {
-  const [reportType, setReportType] = useState("lab");
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
-  const [fileTitle, setFileTitle] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (!selectedFile) {
-      alert("Please select a file first.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await uploadPatientReport({
-        reportType,
-        reportDate,
-        fileTitle,
-        file: selectedFile,
-      });
-      setFileTitle("");
-      setSelectedFile(null);
-      const fileInput = document.getElementById("patient-report-file");
-      if (fileInput) fileInput.value = "";
-      await onUploaded();
-      alert("Report uploaded successfully.");
-    } catch (error) {
-      const status = error?.response?.status;
-      const detail = error?.response?.data?.detail;
-      const message =
-        status === 404
-          ? "Upload API not found. Please refresh after latest backend deployment."
-          : detail || "Upload failed. Please try again.";
-      alert(message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-2 rounded-lg bg-teal-50 text-teal-600"><Upload size={16} /></div>
-        <p className="text-sm font-bold text-gray-800">Upload Report</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <label className="text-xs font-semibold text-gray-600">
-          Report Type
-          <select
-            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
-            value={reportType}
-            onChange={(e) => setReportType(e.target.value)}
-          >
-            <option value="lab">Lab Report</option>
-            <option value="health">Health Report</option>
-          </select>
-        </label>
-
-        <label className="text-xs font-semibold text-gray-600">
-          Report Date
-          <input
-            type="date"
-            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
-            value={reportDate}
-            onChange={(e) => setReportDate(e.target.value)}
-            required
-          />
-        </label>
-
-        <label className="text-xs font-semibold text-gray-600">
-          Title (optional)
-          <input
-            type="text"
-            placeholder="Example: CBC Test"
-            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700"
-            value={fileTitle}
-            onChange={(e) => setFileTitle(e.target.value)}
-          />
-        </label>
-      </div>
-
-      <label className="block text-xs font-semibold text-gray-600 mt-3">
-        File (.pdf, .png, .jpg, .jpeg)
-        <input
-          id="patient-report-file"
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg"
-          className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-teal-700"
-          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-          required
-        />
-      </label>
-
-      <div className="mt-3 flex justify-end">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-teal-600 px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-60"
-        >
-          <Upload size={14} />
-          {submitting ? "Uploading..." : "Upload"}
-        </button>
-      </div>
-    </form>
-  );
-}
+// ── Diagnosis Card ────────────────────────────────────────────────────────────
 
 function DiagnosisCard({ diag, expanded, onToggle }) {
   const prescriptions = diag.prescriptions || [];
-  const labTests      = diag.lab_tests    || [];
-  const symptoms      = diag.symptoms     || [];
+  const labTests      = diag.lab_tests     || [];
+  const symptoms      = diag.symptoms      || [];
+  const procedures    = diag.procedures    || [];
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
-        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl flex-shrink-0"><FileText size={20} /></div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors"
+      >
+        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl flex-shrink-0">
+          <FileText size={20} />
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-800">{diag.chief_complaint || "Consultation"}</p>
+          <p className="text-sm font-bold text-gray-800">
+            {diag.chief_complaint || "Consultation"}
+          </p>
           <p className="text-xs text-gray-500 mt-0.5">
             {diag.diagnosis_date}
-            {diag.doctor_name && <span className="ml-2 text-gray-400">· {diag.doctor_name}</span>}
+            {diag.doctor_name && (
+              <span className="ml-2 text-gray-400">· {diag.doctor_name}</span>
+            )}
           </p>
         </div>
-        {expanded ? <ChevronUp size={18} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={18} className="text-gray-400 flex-shrink-0" />}
+        {expanded ? (
+          <ChevronUp size={18} className="text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronDown size={18} className="text-gray-400 flex-shrink-0" />
+        )}
       </button>
 
       {expanded && (
@@ -225,17 +132,19 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: "BP",     value: diag.vital_bp },
-                  { label: "HR",     value: diag.vital_hr   ? `${diag.vital_hr} bpm`  : null },
-                  { label: "Temp",   value: diag.vital_temp ? `${diag.vital_temp}°F`  : null },
-                  { label: "SpO₂",   value: diag.vital_spo2 ? `${diag.vital_spo2}%`  : null },
-                  { label: "Weight", value: diag.weight     ? `${diag.weight} kg`     : null },
-                  { label: "Height", value: diag.height     ? `${diag.height} cm`     : null },
-                ].filter((v) => v.value).map(({ label, value }) => (
-                  <div key={label} className="bg-gray-50 rounded-xl px-3 py-2">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">{label}</p>
-                    <p className="text-sm font-bold text-gray-800">{value}</p>
-                  </div>
-                ))}
+                  { label: "HR",     value: diag.vital_hr   ? `${diag.vital_hr} bpm` : null },
+                  { label: "Temp",   value: diag.vital_temp ? `${diag.vital_temp}°F` : null },
+                  { label: "SpO₂",   value: diag.vital_spo2 ? `${diag.vital_spo2}%` : null },
+                  { label: "Weight", value: diag.weight     ? `${diag.weight} kg`    : null },
+                  { label: "Height", value: diag.height     ? `${diag.height} cm`    : null },
+                ]
+                  .filter((v) => v.value)
+                  .map(({ label, value }) => (
+                    <div key={label} className="bg-gray-50 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">{label}</p>
+                      <p className="text-sm font-bold text-gray-800">{value}</p>
+                    </div>
+                  ))}
               </div>
             </Section>
           )}
@@ -245,9 +154,14 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
             <Section icon={AlertTriangle} title="Symptoms" color="text-amber-500 bg-amber-50">
               <div className="flex flex-wrap gap-2">
                 {symptoms.map((s, i) => (
-                  <span key={i} className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full">
+                  <span
+                    key={i}
+                    className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full"
+                  >
                     {s.symptom_name}
-                    {s.duration_days && <span className="text-amber-500 ml-1">· {s.duration_days}d</span>}
+                    {s.duration_days && (
+                      <span className="text-amber-500 ml-1">· {s.duration_days}d</span>
+                    )}
                   </span>
                 ))}
               </div>
@@ -260,19 +174,28 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
               <div className="space-y-2">
                 {prescriptions.map((p, i) => (
                   <div key={i} className="bg-gray-50 rounded-xl px-3 py-2.5">
-                    <div className="flex justify-between items-start">
-                      <p className="text-sm font-bold text-gray-800">{p.medicine_name || `Medicine #${p.medicine_id}`}</p>
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="text-sm font-bold text-gray-800 flex-1 min-w-0">
+                        {p.medicine_name || "Medicine"}
+                      </p>
                       {p.frequency && (
-                        <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full">{p.frequency}</span>
+                        <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                          {p.frequency}
+                        </span>
                       )}
                     </div>
                     {(p.morning_dosage || p.afternoon_dosage || p.night_dosage) && (
                       <p className="text-xs text-gray-500 mt-1">
-                        M: {p.morning_dosage || "0"} · A: {p.afternoon_dosage || "0"} · N: {p.night_dosage || "0"}
+                        M: {p.morning_dosage || "0"} · A: {p.afternoon_dosage || "0"} · N:{" "}
+                        {p.night_dosage || "0"}
                         {p.duration_days && ` · ${p.duration_days} days`}
                       </p>
                     )}
-                    {p.special_instructions && <p className="text-xs text-gray-400 mt-0.5 italic">{p.special_instructions}</p>}
+                    {p.special_instructions && (
+                      <p className="text-xs text-gray-400 mt-0.5 italic">
+                        {p.special_instructions}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -284,9 +207,42 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
             <Section icon={FlaskConical} title="Lab Tests Ordered" color="text-purple-600 bg-purple-50">
               <div className="flex flex-wrap gap-2">
                 {labTests.map((t, i) => (
-                  <span key={i} className="text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100 px-2.5 py-1 rounded-full">
-                    {t.test_name || `Test #${t.test_id}`}
+                  <span
+                    key={i}
+                    className="text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100 px-2.5 py-1 rounded-full"
+                  >
+                    {t.test_name || "Lab Test"}
                   </span>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Procedures */}
+          {procedures.length > 0 && (
+            <Section icon={Stethoscope} title="Procedures" color="text-indigo-600 bg-indigo-50">
+              <div className="space-y-2">
+                {procedures.map((pr, i) => (
+                  <div
+                    key={i}
+                    className="bg-gray-50 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-800">
+                        {pr.procedure_name}
+                      </p>
+                      {pr.prerequisite_text && (
+                        <p className="text-xs text-gray-400 mt-0.5 italic">
+                          {pr.prerequisite_text}
+                        </p>
+                      )}
+                    </div>
+                    {pr.price != null && (
+                      <span className="text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg flex-shrink-0">
+                        ₹{Number(pr.price).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
             </Section>
@@ -294,7 +250,9 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
 
           {diag.followup_date && (
             <div className="px-4 py-3 bg-teal-50/50">
-              <p className="text-xs font-bold text-teal-700">Follow-up: {diag.followup_date}</p>
+              <p className="text-xs font-bold text-teal-700">
+                Follow-up: {diag.followup_date}
+              </p>
             </div>
           )}
         </div>
@@ -307,13 +265,17 @@ function Section({ icon: Icon, title, color, children }) {
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-2 mb-2.5">
-        <div className={`p-1.5 rounded-lg ${color}`}><Icon size={14} /></div>
+        <div className={`p-1.5 rounded-lg ${color}`}>
+          <Icon size={14} />
+        </div>
         <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">{title}</p>
       </div>
       {children}
     </div>
   );
 }
+
+// ── Report File Card ──────────────────────────────────────────────────────────
 
 function ReportFileCard({ report }) {
   const [blobUrl, setBlobUrl] = useState(null);
@@ -339,23 +301,31 @@ function ReportFileCard({ report }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
-      <div className={`p-3 rounded-xl flex-shrink-0 ${isPdf ? "bg-red-50 text-red-500" : isImage ? "bg-blue-50 text-blue-500" : "bg-gray-100 text-gray-500"}`}>
+      <div
+        className={`p-3 rounded-xl flex-shrink-0 ${
+          isPdf ? "bg-red-50 text-red-500" : isImage ? "bg-blue-50 text-blue-500" : "bg-gray-100 text-gray-500"
+        }`}
+      >
         <FileText size={22} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-gray-800 truncate">{report.file_title || report.filename}</p>
+        <p className="text-sm font-bold text-gray-800 truncate">
+          {report.file_title || report.filename}
+        </p>
         <p className="text-xs text-gray-400 mt-0.5">
           {report.date}
-          {report.report_type && <span className="ml-2 uppercase">{report.report_type}</span>}
-          {report.file_size > 0 && <span className="ml-2">{(report.file_size / 1024).toFixed(1)} KB</span>}
+          {report.file_size > 0 && (
+            <span className="ml-2">{(report.file_size / 1024).toFixed(1)} KB</span>
+          )}
         </p>
       </div>
       <button
         onClick={handleView}
         disabled={loading}
-        className="flex items-center gap-1.5 text-xs font-bold text-teal-600 bg-teal-50 border border-teal-100 px-3 py-1.5 rounded-lg hover:bg-teal-100 transition-colors flex-shrink-0 disabled:opacity-60"
+        className="flex items-center gap-1.5 text-xs font-bold text-teal-600 bg-teal-50 border border-teal-100 px-3 py-1.5 rounded-lg hover:bg-teal-100 active:scale-95 transition-all flex-shrink-0 disabled:opacity-60"
       >
-        <Eye size={14} />{loading ? "…" : "View"}
+        <Eye size={14} />
+        {loading ? "…" : "View"}
       </button>
     </div>
   );
