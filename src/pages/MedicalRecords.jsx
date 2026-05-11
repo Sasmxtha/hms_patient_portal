@@ -1,42 +1,125 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  FileText, Pill, FlaskConical, Activity,
-  ChevronDown, ChevronUp, Upload, Eye, AlertTriangle, Stethoscope,
+  FileText, Pill, FlaskConical, Activity, ChevronDown, ChevronUp,
+  Upload, Eye, AlertTriangle, Stethoscope, Plus, X, CheckCircle2,
+  ImageIcon, FileIcon, Loader2,
 } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
-import { getDiagnoses, getPatientReports, getReportFileBlob } from "../api/records";
+import {
+  getDiagnoses,
+  getPatientReports,
+  getReportFileBlob,
+  uploadPatientReport,
+} from "../api/records";
+import dayjs from "dayjs";
 
-const TABS = ["Diagnoses", "Uploaded Files"];
+const TABS = ["Diagnoses", "Lab Reports", "Health Records"];
+
+// ─── Allowed file types ───────────────────────────────────────────────────────
+const ACCEPT = ".pdf,.jpg,.jpeg,.png";
+const MAX_MB  = 10;
 
 export default function MedicalRecordsPage() {
-  const [activeTab, setActiveTab] = useState("Diagnoses");
-  const [diagnoses, setDiagnoses] = useState([]);
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState({});
+  const [activeTab, setActiveTab]   = useState("Diagnoses");
+  const [diagnoses, setDiagnoses]   = useState([]);
+  const [reports,   setReports]     = useState([]);   // all uploaded reports
+  const [loading,   setLoading]     = useState(true);
+  const [expanded,  setExpanded]    = useState({});
 
-  useEffect(() => {
+  // Upload sheet state
+  const [uploadSheet, setUploadSheet] = useState(null); // "lab" | "health" | null
+  const [uploadFile,  setUploadFile]  = useState(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDate,  setUploadDate]  = useState(dayjs().format("YYYY-MM-DD"));
+  const [uploading,   setUploading]   = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadDone,  setUploadDone]  = useState(false);
+  const fileInputRef = useRef(null);
+
+  function loadData() {
+    setLoading(true);
     Promise.all([
       getDiagnoses().then(setDiagnoses).catch(() => setDiagnoses([])),
       getPatientReports().then(setReports).catch(() => setReports([])),
     ]).finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  // Filter reports by type
+  const labReports    = reports.filter((r) => (r.report_type || "").toLowerCase() === "lab");
+  const healthReports = reports.filter((r) => (r.report_type || "").toLowerCase() === "health");
+
+  // ── Upload handlers ──────────────────────────────────────────────────────────
+  function openUpload(type) {
+    setUploadSheet(type);
+    setUploadFile(null);
+    setUploadTitle("");
+    setUploadDate(dayjs().format("YYYY-MM-DD"));
+    setUploadError("");
+    setUploadDone(false);
+  }
+
+  function closeUpload() {
+    setUploadSheet(null);
+    setUploadFile(null);
+    setUploadError("");
+    setUploadDone(false);
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setUploadError(`File too large. Max ${MAX_MB} MB allowed.`);
+      return;
+    }
+    setUploadError("");
+    setUploadFile(file);
+    if (!uploadTitle.trim()) {
+      setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+    }
+  }
+
+  async function handleUpload() {
+    if (!uploadFile) { setUploadError("Please select a file."); return; }
+    if (!uploadDate)  { setUploadError("Please select a date."); return; }
+    setUploading(true);
+    setUploadError("");
+    try {
+      await uploadPatientReport({
+        reportType: uploadSheet,   // "lab" or "health"
+        reportDate: uploadDate,
+        fileTitle:  uploadTitle.trim() || uploadFile.name,
+        file:       uploadFile,
+      });
+      setUploadDone(true);
+      // Refresh reports list
+      getPatientReports().then(setReports).catch(() => {});
+    } catch (err) {
+      setUploadError(err.response?.data?.detail || "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col min-h-full bg-gray-50">
       <PageHeader title="Health Records" />
 
-      <div className="bg-white border-b border-gray-100 px-4 flex gap-1 sticky top-0 z-10">
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-100 flex sticky top-0 z-10 overflow-x-auto scrollbar-hide">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
+            className={`flex-shrink-0 py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
               activeTab === tab
                 ? "border-teal-600 text-teal-700"
                 : "border-transparent text-gray-400 hover:text-gray-600"
@@ -53,6 +136,7 @@ export default function MedicalRecordsPage() {
             <div className="w-8 h-8 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
           </div>
         ) : activeTab === "Diagnoses" ? (
+          /* ── Diagnoses ── */
           diagnoses.length === 0 ? (
             <EmptyState
               icon={<FileText size={28} />}
@@ -71,20 +155,193 @@ export default function MedicalRecordsPage() {
               ))}
             </div>
           )
-        ) : reports.length === 0 ? (
-          <EmptyState
-            icon={<Upload size={28} />}
-            title="No uploaded files"
-            subtitle="Reports uploaded by the clinic will appear here."
+        ) : activeTab === "Lab Reports" ? (
+          /* ── Lab Reports ── */
+          <ReportsTab
+            reports={labReports}
+            type="lab"
+            emptyTitle="No lab reports uploaded"
+            emptySubtitle="Upload your lab reports — blood tests, X-rays, scans, etc."
+            onUpload={() => openUpload("lab")}
           />
         ) : (
-          <div className="space-y-3">
-            {reports.map((report) => (
-              <ReportFileCard key={report.upload_id} report={report} />
-            ))}
-          </div>
+          /* ── Health Records ── */
+          <ReportsTab
+            reports={healthReports}
+            type="health"
+            emptyTitle="No health records uploaded"
+            emptySubtitle="Upload prescriptions, discharge summaries, or any health documents."
+            onUpload={() => openUpload("health")}
+          />
         )}
       </div>
+
+      {/* ── Upload bottom sheet ── */}
+      {uploadSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={!uploading ? closeUpload : undefined}
+          />
+
+          <div className="relative bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-gray-800">
+                Upload {uploadSheet === "lab" ? "Lab Report" : "Health Record"}
+              </h3>
+              {!uploading && (
+                <button
+                  onClick={closeUpload}
+                  className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+
+            {uploadDone ? (
+              /* Success state */
+              <div className="flex flex-col items-center py-6">
+                <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mb-3">
+                  <CheckCircle2 size={36} className="text-teal-600" />
+                </div>
+                <p className="text-base font-bold text-gray-800 mb-1">Uploaded!</p>
+                <p className="text-sm text-gray-500 mb-5">Your file has been saved.</p>
+                <button
+                  onClick={closeUpload}
+                  className="w-full py-3.5 rounded-2xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* File picker */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPT}
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full border-2 border-dashed rounded-2xl p-5 flex flex-col items-center gap-2 transition-colors ${
+                    uploadFile
+                      ? "border-teal-400 bg-teal-50"
+                      : "border-gray-200 bg-gray-50 hover:border-teal-300"
+                  }`}
+                >
+                  {uploadFile ? (
+                    <>
+                      <FileIcon size={28} className="text-teal-600" />
+                      <p className="text-sm font-bold text-teal-700 text-center break-all">
+                        {uploadFile.name}
+                      </p>
+                      <p className="text-xs text-teal-500">
+                        {(uploadFile.size / 1024).toFixed(1)} KB · Tap to change
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={28} className="text-gray-400" />
+                      <p className="text-sm font-semibold text-gray-600">
+                        Tap to select file
+                      </p>
+                      <p className="text-xs text-gray-400">PDF, JPG, PNG · Max {MAX_MB} MB</p>
+                    </>
+                  )}
+                </button>
+
+                {/* Title */}
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">
+                    Title (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                    placeholder="e.g. Blood Test — May 2026"
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 outline-none focus:border-teal-500 bg-gray-50 focus:bg-white transition-colors placeholder-gray-400"
+                  />
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">
+                    Report Date
+                  </label>
+                  <input
+                    type="date"
+                    value={uploadDate}
+                    max={dayjs().format("YYYY-MM-DD")}
+                    onChange={(e) => setUploadDate(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 outline-none focus:border-teal-500 bg-gray-50 focus:bg-white transition-colors"
+                  />
+                </div>
+
+                {/* Error */}
+                {uploadError && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                    <AlertTriangle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-600 text-sm font-medium">{uploadError}</p>
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading || !uploadFile}
+                  className="w-full py-4 rounded-2xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                >
+                  {uploading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Uploading…
+                    </span>
+                  ) : (
+                    "Upload File"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Reports Tab (Lab / Health) ────────────────────────────────────────────────
+
+function ReportsTab({ reports, type, emptyTitle, emptySubtitle, onUpload }) {
+  return (
+    <div>
+      {/* Upload button always visible at top */}
+      <button
+        onClick={onUpload}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 text-teal-700 font-bold text-sm hover:bg-teal-100 active:scale-[0.98] transition-all mb-4"
+      >
+        <Plus size={18} />
+        Upload {type === "lab" ? "Lab Report" : "Health Record"}
+      </button>
+
+      {reports.length === 0 ? (
+        <EmptyState
+          icon={type === "lab" ? <FlaskConical size={28} /> : <FileText size={28} />}
+          title={emptyTitle}
+          subtitle={emptySubtitle}
+        />
+      ) : (
+        <div className="space-y-3">
+          {reports.map((report) => (
+            <ReportFileCard key={report.upload_id} report={report} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -126,6 +383,7 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
 
       {expanded && (
         <div className="border-t border-gray-100 divide-y divide-gray-50">
+
           {/* Vitals */}
           {(diag.vital_bp || diag.vital_hr || diag.vital_temp || diag.vital_spo2) && (
             <Section icon={Activity} title="Vitals" color="text-rose-500 bg-rose-50">
@@ -202,7 +460,7 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
             </Section>
           )}
 
-          {/* Lab Tests */}
+          {/* Lab Tests Ordered */}
           {labTests.length > 0 && (
             <Section icon={FlaskConical} title="Lab Tests Ordered" color="text-purple-600 bg-purple-50">
               <div className="flex flex-wrap gap-2">
@@ -220,38 +478,48 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
 
           {/* Procedures */}
           {procedures.length > 0 && (
-            <Section icon={Stethoscope} title="Procedures" color="text-indigo-600 bg-indigo-50">
+            <Section icon={Stethoscope} title="Procedures Suggested" color="text-indigo-600 bg-indigo-50">
               <div className="space-y-2">
-                {procedures.map((pr, i) => (
-                  <div
-                    key={i}
-                    className="bg-gray-50 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-800">
-                        {pr.procedure_name}
-                      </p>
-                      {pr.prerequisite_text && (
-                        <p className="text-xs text-gray-400 mt-0.5 italic">
-                          {pr.prerequisite_text}
-                        </p>
+                {procedures.map((pr, i) => {
+                  // backend may return procedure_name OR free_text_procedure OR procedure_text
+                  const name =
+                    pr.procedure_name ||
+                    pr.free_text_procedure ||
+                    pr.procedure_text ||
+                    "Procedure";
+                  return (
+                    <div
+                      key={i}
+                      className="bg-indigo-50/60 border border-indigo-100 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Stethoscope size={14} className="text-indigo-500 flex-shrink-0" />
+                          <p className="text-sm font-bold text-gray-800">{name}</p>
+                        </div>
+                        {pr.prerequisite_text && (
+                          <p className="text-xs text-gray-400 mt-0.5 italic pl-5">
+                            {pr.prerequisite_text}
+                          </p>
+                        )}
+                      </div>
+                      {pr.price != null && pr.price > 0 && (
+                        <span className="text-sm font-bold text-indigo-700 bg-white border border-indigo-200 px-2.5 py-1 rounded-lg flex-shrink-0">
+                          ₹{Number(pr.price).toLocaleString("en-IN")}
+                        </span>
                       )}
                     </div>
-                    {pr.price != null && (
-                      <span className="text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg flex-shrink-0">
-                        ₹{Number(pr.price).toLocaleString("en-IN")}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Section>
           )}
 
+          {/* Follow-up */}
           {diag.followup_date && (
             <div className="px-4 py-3 bg-teal-50/50">
               <p className="text-xs font-bold text-teal-700">
-                Follow-up: {diag.followup_date}
+                📅 Follow-up: {diag.followup_date}
               </p>
             </div>
           )}
@@ -260,6 +528,8 @@ function DiagnosisCard({ diag, expanded, onToggle }) {
     </div>
   );
 }
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
 
 function Section({ icon: Icon, title, color, children }) {
   return (
@@ -281,7 +551,7 @@ function ReportFileCard({ report }) {
   const [blobUrl, setBlobUrl] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const ext = report.filename?.split(".").pop()?.toLowerCase() || "";
+  const ext     = (report.filename || "").split(".").pop().toLowerCase();
   const isPdf   = ext === "pdf";
   const isImage = ["jpg", "jpeg", "png"].includes(ext);
 
@@ -303,10 +573,12 @@ function ReportFileCard({ report }) {
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
       <div
         className={`p-3 rounded-xl flex-shrink-0 ${
-          isPdf ? "bg-red-50 text-red-500" : isImage ? "bg-blue-50 text-blue-500" : "bg-gray-100 text-gray-500"
+          isPdf   ? "bg-red-50 text-red-500"
+          : isImage ? "bg-blue-50 text-blue-500"
+          : "bg-gray-100 text-gray-500"
         }`}
       >
-        <FileText size={22} />
+        {isImage ? <ImageIcon size={22} /> : <FileIcon size={22} />}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-gray-800 truncate">
